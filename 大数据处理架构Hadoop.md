@@ -38,7 +38,7 @@
 ![Hadoop结构图](imgs/Hadoop2.2.png)
 
 1. HDFS：分布式文件系统 Common：最基础服务
-2. YARN：资源管理和调度器，内存、CUP等资源
+2. YARN：资源管理和调度器，内存、CPU等资源
 3. MapReduce：分布式并行编程模型，离线计算，批处理，不是实时计算，基于磁盘的
 4. Tez：运行在YARN之上的下一代Hadoop查询处理框架，对很多MapReduce作业优化以后构建有向无环图
 5. Spark：类似于Hadoop MapReduce的通用并行框架，基于内存计算，快
