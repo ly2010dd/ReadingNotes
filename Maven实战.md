@@ -191,9 +191,310 @@ Main-Class: pers.liy.helloworld.HelloWorld
 4. 格式含义是wgroupId:artifactId:version:goal
 5. 注意执行mvn archetype:generate会从国外网站下载资源，需要配置国外代理
 
+## 4 背景案例
+注册系统（略）
 
 
+# 5 坐标和依赖
 
+## 5.1 何为坐标
+1. maven坐标元素：groupId， artifactId, version, packaging, classifier
+2. maven从内置的中央仓库下载构建：http://repo1.maven.org/maven2.
+3. Maven强制要求，在自己开发项目时也要定义适当的坐标
+4. groupId: 当前maven项目隶属的实际项目
+- maven项目和实际项目可能不是一一对应，有可能是实际项目的子集。比如，SpringFramework实际项目对应对maven项目有很多如spring-core、springspring-context等
+- groupId不应对应隶属的组织和公司
+- groupId表示方式与java包名leisi类似，与域名反向一一对应
+5. artifactId: 实际项目中的一个maven项目（模块）
+- 推荐使用实际项目名称作为artifaceId的前缀
+- 默认，maven生成的构建会以artifactId开头
+6. version: maven项目当前所处的版本
+7. packaging: 打包方式
+- 与生成的文件扩展名对应
+- 打包方式不同会影响构建的生命周期，比如war和jar打包会使用不同的命令
+- 默认使用jar打包方式
+8. classifier：帮助定义构建输出的一些附属构件
+- 附属构件与主构件对应
+- eg：主构件-javadoc.jar, 主构件-sources.jar这样的附属构件，这时，javadoc和sources就是这两个附属构件的classifier
+- 不能直接定义项目的classifier，因需要附加插件帮助生成的
+9. groupId， artifactId, version是必须定义的，packaging是可选的（默认jar）， classifier是不能直接定义的
+10. 项目构件的文件名与坐标对应：artifactId-version[-classifier].packaging
 
+## 5.4 依赖的配置
 
+```
+<project>  
+  ...  
+  <dependencies>  
+    <dependency>  
+      <groupId>...</groupId>  
+      <artifactId>...</artifactId>  
+      <version>...</version> 
+      <type>...</type>  
+      <scope>...</scope> 	
+	  <optional>...</optional> 	  
+      <exclusions>  
+        <exclusion>  
+          ...
+        </exclusion>  
+		...
+      </exclusions>  
+    </dependency>  
+	...
+  </dependencies>  
+  ...
+</project>  
+```
+1. type：一类的类型，对应于坐标定义时的packaging，默认不必声明，默认为jar
+2. scope：依赖的范围
+3. optional：标记依赖是否可选
+4. exclusions：用来排除传递性依赖
+
+## 5.5 依赖范围
+1. maven有三套classpath：编译主代码classpath、测试测试代码classpath、运行项目classpath
+2. 依赖范围就是用来控制着三种classpath的
+3. maven的几种依赖范围：compile、test、provided、runtime、system、import
+- compile：默认使用此依赖范围，对三套classpath都有效
+- test：只对测试classpath有效，编译主代码和运行项目都无法使勇此类依赖
+- provided：对编译、测试classpath有效，运行时无效，如servlet-api
+- runtime：对测试、运行classpath有效，编译主代码时无效，如jdbc驱动
+- system：classpath关系与provided一致，但必须通过systemPath元素显示地指定依赖文件的路径；不通过maven仓库解析，与本机系统绑定，造成构建的不可移植，慎用！
+
+```
+<dependency>  
+    <groupId>javax.sql</groupId>  
+    <artifactId>jdbc-stdext</artifactId>  
+    <version>2.0</version>  
+    <scope></scope>  
+    <systemPath>${java.home}/lib/rt.jar</systemPath>  
+</dependency>  
+```
+
+- import(maven2.0.9以上)：不会对三种classpath产生实际影响
+![dependency_scope_and_classpath](imgs/dependency_scope_and_classpath.png)
+
+## 5.6 传递性依赖
+
+### 5.6.2 依赖范围与传递依赖
+1. A依赖B，叫第一直接依赖；B依赖C，叫第二直接依赖；A依赖C叫传递依赖
+![dependency_scope_influnence_pass](imgs/dependency_scope_influnence_pass.png)
+2. 规律：看第二直接依赖（横坐标）
+- compile：传递依赖与第一直接依赖一致
+- test：依赖不传递
+- provided：只传递第一直接依赖是provided的，传递依赖也是provided
+- runtime：与第一直接依赖一致，compile除外
+
+### 5.6.3 依赖调解
+1. A->B->C->X(1.0)、A->D-X(2.0)，X都是A的传递依赖，将被解析为哪个版本？
+- 第一原则：路径最近优先，看路径长度所以选X(2.0)会被解析
+- 第二原则：第一原则优先，长度相等下，在pom中依赖声明顺序靠前者优先
+
+## 5.8 可选依赖
+1. A->B、B->X(可选)、B->Y(可选)，如果依赖都是compile的，由于XY是可选的，所以A不会传递依赖XY
+2. A->B-X时需要在A的pom里显示声明依赖X
+3. 理想情况下是不应该使用可选依赖的
+
+## 5.9 最佳实践
+### 5.9.1 排除依赖
+1. 本来A->B->C(原生)，但C(官网的不稳定)，想依赖个第三方的C(第三方稳定)，需在A中显示声明依赖C(第三方)
+
+```
+<project>  
+  <groupId>...</groupId>  
+  <artifactId>A</artifactId>  
+  <version>...</version>   
+  <dependencies>  
+    <dependency>  
+      <groupId>...</groupId>  
+      <artifactId>B</artifactId>  
+      <version>...</version> 
+	  <optional>...</optional> 	  
+      <exclusions>  
+        <exclusion>  
+          <groupId>...</groupId>  
+          <artifactId>C(官网)</artifactId>  
+        </exclusion>  
+		...
+      </exclusions>  
+    </dependency>  
+	
+	<dependency>  
+      <groupId>...</groupId>  
+      <artifactId>C(第三方)</artifactId>  
+      <version>...</version> 
+    </dependency>
+  </dependencies>  
+  ...
+</project>  
+```
+
+2. 声明exclusion时只需要指定groupId和artifactId
+
+### 5.9.2 归类依赖
+1. 比如spring-framework各模块依赖的版本都是一样的，需要个变量替代，避免多处重复修改
+
+```
+<project>  
+  <groupId>...</groupId>  
+  <artifactId>A</artifactId>  
+  <version>...</version>   
+  
+  <properties>
+    <springframework.version>2.5.6</springframework.version>
+  </properties>
+  
+  <dependencies>  
+    <dependency>  
+      <groupId>org.springframework</groupId>  
+      <artifactId>spring-core</artifactId>  
+      <version>${springframework.version}</version> 
+    </dependency>  
+	<dependency>  
+      <groupId>org.springframework</groupId>  
+      <artifactId>spring-beans</artifactId>  
+      <version>${springframework.version}</version> 
+    </dependency>
+  </dependencies>  
+</project>  
+```
+
+### 5.9.3 优化依赖
+1. 应不断优化pom
+2. maven会自动解析所有项目的直接依赖和传递性依赖，根据规则正确判断依赖范围，能调节冲突以保证一个构件只有唯一的版本在依赖中存在。这些工作之后，已存在的依赖被称为已解析的依赖（Resolved Dependency）
+3. mvn dependency:list查看当前项目已解析依赖
+4. mvn dependency:tree查看依赖树
+5. mvn dependency:analyze帮助分析当前项目的依赖
+- Used undeclared dependencies：使用到但没有显示声明的依赖；有潜在风险，这种依赖是通过依赖传递进来的，当升级直接依赖时，相关传递依赖也会发生变化，可能导致出错，不易察觉；因此应直接显示声明这类依赖
+- Unused declared dependencies：未使用但显示声明的依赖；不应直接简单删除其声明，因dependency:analyze只会分析编译主代码和测试代码需要的依赖，一些执行测试和运行时需要的依赖发现不了
+
+# 仓库
+
+## 6.2 仓库的布局
+1. 坐标与仓库路径的对应关系：groupId/artifactId/version/artifactId-version.packaging
+
+## 6.3 仓库的分类
+1. 两类： 本地仓库、远程仓库（中央仓库、私服、其他仓库）
+2. maven根据坐标首先查找本地仓库、本地没有去远程仓库查找，找到构件之后下载到本地仓库，如果都没有则报错
+3. 中央仓库：是默认的远程仓库，包含了绝大部分构建
+4. 私服：局域网架设的私有仓库服务器，用其代理所有的远程仓库，节省时间
+5. 其他公共库：如 repository.jboss.com/maven2/等
+
+### 6.3.1 本地仓库
+1. 自定义本地仓库地址~/.m2/settings.xml
+<settings>
+    <localRepository>...</localRepository>
+</settings>
+2. 构建进入本地仓库两种方式：从远程仓库下载、mvn clean install安装到本地仓库
+3. 刚装好maven后本地仓库是不存在的，只有输入第一条命令之后才会创建本地仓库
+
+### 6.3.2 中央仓库
+1. maven安装自带中央仓库配置，$M2_HOME/lib/maven-model-builder-3.0.jar中org/apache/maven/model/pom-4.0.0.xml配置
+```
+<project>  
+    ...
+    <repositories>
+    	<repository>
+    	  <id>jboss</id>
+    	  <name>Maven Repository Switchboard</name>
+    	  <url>http://repo1.maven.org/maven2</url>
+    	  <layout>default</layout>
+    	  <snapshots>
+    		<enabled>false</enabled>
+    	  </snapshots>
+    	</repository>
+    </repositories>
+    ...
+</project>  
+```
+这个pom文件是所有maven项目都会继承的，snapshots为false表示不从该中央仓库下载快照版的构件
+
+## 6.3.3 私服
+1. 局域网内相当于本地仓库与远程仓库之间的缓存
+2. 即使在一台可以连入互联网的个人机器上使用maven，也应在本地建立私服
+- 节省自己外网带宽
+- 加速maven构建
+- 部署第三方构件
+- 提高稳定性，增强控制
+- 降低中央仓库负荷
+3. 最流行的maven私服软件Nexus
+
+## 6.4 远程仓库的配置
+1. 有时默认的中央仓库无法满足项目需求，可以自己在pom中配置远程仓库
+```
+
+<repositories>
+	<repository>
+	  <id>jboss</id>
+	  <name>JBoss Repository</name>
+	  <url>http://repository.jboss.org/maven2/</url>
+	  <layout>default</layout>
+	  <releases>
+	    <enabled>true</enabled>
+	  </releases>
+	  <snapshots>
+		<enabled>false</enabled>
+	  </snapshots>
+	</repository>
+</repositories>
+```
+- 中央仓库id是central，其他远程仓库id如果也是这个就会覆盖，id应唯一
+- releases是true，开启发布版本下载支持
+- snapshots是false，关闭快照版本下载支持
+- layout是仓库布局，maven2、maven3是default
+- releases、snapshots子元素除了enabled，还有updatePolicy和checkSumPolicy
+```
+<snapshots>
+    <enabled>false</enabled>
+    <updatePolicy>daily</updatePolicy>
+    <checkSumPolicy>ignore</checkSumPolicy>
+</snapshots>
+```
+- updatePolicy: 从远程仓库检查更新的频率；daily-每天检查一次；never-从不检查更新；always-每次构建都检查更新；interval: X-每隔X分钟检查一次
+- checkSumPolicy：配置检查校验和文件的策略；warn-构建时数据警告信息（默认）；fail-遇到校验和错误就让构建失败；ignore-完全忽略校验和错误
+
+### 6.4.1 远程仓库的认证
+1. 远程仓库可以配置在pom中，但认证信息必须配置在setting.xml中
+```
+<settings>
+    <servers>
+        <server>
+          <id>deploymentRepo</id>
+          <username>repouser</username>
+          <password>repopwd</password>
+        </server>
+    </servers>
+</settings>
+```
+
+### 6.4.2 部署到远程仓库
+```
+<project>
+    ...
+    <distributionManagement>
+        <repository>
+            <id>proj-releases</id>
+            <name>proj repo</name>
+            <url>http://172.17.103.59:8081/nexus/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>proj-snapshots</id>
+            <name>proj repo</name>
+            <url>http://172.17.103.59:8081/nexus/content/repositories/snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+     ...
+</project>
+```
+- repository：发布版本构件的仓库
+- snapshotRepository：快照版本的仓库
+- 远程仓库一般需要认证，在settings.xml中配置
+1. mvn clean deploy就会将构件部署到配置对应的远程仓库
+
+### 6.5 快照版本
+
+1. 设定为2.1-SNAPSHOP后，在发布过程中，maven会自动为构件打上时间戳。比如：2.1-20091214.221414-13，表示2009年12月14号22点14分14秒第13次快照
+2. 有了时间戳，maven每次就能找到最新的SNAPSHOP了
+3. mvn clean install -U强制让maven检查更新
+4. 快照版本只应在组织内部的项目或模块间依赖使用
+5. 项目不应依赖任何组织外的快照版本
 
