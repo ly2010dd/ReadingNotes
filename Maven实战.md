@@ -271,13 +271,13 @@ Main-Class: pers.liy.helloworld.HelloWorld
 ```
 
 - import(maven2.0.9以上)：不会对三种classpath产生实际影响
-![dependency_scope_and_classpath](imgs/dependency_scope_and_classpath.png)
+![依赖范围与classpath关系](imgs/依赖范围与classpath关系.png)
 
 ## 5.6 传递性依赖
 
 ### 5.6.2 依赖范围与传递依赖
 1. A依赖B，叫第一直接依赖；B依赖C，叫第二直接依赖；A依赖C叫传递依赖
-![dependency_scope_influnence_pass](imgs/dependency_scope_influnence_pass.png)
+![依赖范围影响传递依赖](imgs/依赖范围影响传递依赖.png)
 2. 规律：看第二直接依赖（横坐标）
 - compile：传递依赖与第一直接依赖一致
 - test：依赖不传递
@@ -498,3 +498,39 @@ Main-Class: pers.liy.helloworld.HelloWorld
 4. 快照版本只应在组织内部的项目或模块间依赖使用
 5. 项目不应依赖任何组织外的快照版本
 
+### 6.6 从仓库解析依赖的机制
+
+1. RELEASE和LATEST版本是根据groupId/artifactId/maven-metadata.xml计算出来的
+2. 在依赖声明中使用RELEASE和LATEST版本是不推荐的，随时会解析到不同的构件，且maven不会告知这些变化
+3. 仓库元数据不是永远正确
+
+## 6.7 镜像
+1. 如果仓库X能提供仓库Y的所有内容，X是Y的一个镜像
+2. 比如http://maven.aliyun.com/nexus/content/groups/public/就是中央仓库o1.maven.org在中国的镜像
+3. 在settings.xml配置
+```
+<settings>
+    <mirrors>
+        <mirror>  
+          <id>alimaven</id>  
+          <name>aliyun maven</name>  
+          <url>http://maven.aliyun.com/nexus/content/groups/public/</url>  
+          <mirrorOf>central</mirrorOf>          
+        </mirror> 
+    </mirrors>
+</settings>
+```
+- mirrorOf为central表示中央仓库的镜像，任何对中央仓库的请求都会转至该镜像
+4. 镜像的高级配置
+- <mirrorOf>*</mirrorOf>：匹配所有远程库
+- <mirrorOf>external:*</mirrorOf>：匹配所有远程库，使用localhost、file://协议的除外，即匹配所有不在本机上的远程库
+- <mirrorOf>repo1,repo2</mirrorOf>：匹配repo1和repo2
+- <mirrorOf>*,! repo1</mirrorOf>：匹配所有，repo1除外
+
+## 6.8 仓库搜索服务
+
+### 6.8.1 Sonatype Nexus
+1. nexus：http://repository.sonatype.org/
+2. jarvana：http://www.jarvana.com/jarvana/
+3. MVNbrowser：http://www.mvnbrowser.com
+4. MVNrepository：http://mvnrepository.com
