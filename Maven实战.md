@@ -271,13 +271,13 @@ Main-Class: pers.liy.helloworld.HelloWorld
 ```
 
 - import(maven2.0.9以上)：不会对三种classpath产生实际影响
-![依赖范围与classpath关系](imgs/依赖范围与classpath关系.png)
+![dependency_scope_and_classpath](imgs/dependency_scope_and_classpath.png)
 
 ## 5.6 传递性依赖
 
 ### 5.6.2 依赖范围与传递依赖
 1. A依赖B，叫第一直接依赖；B依赖C，叫第二直接依赖；A依赖C叫传递依赖
-![依赖范围影响传递依赖](imgs/依赖范围影响传递依赖.png)
+![dependency_scope_influnence_pass](imgs/dependency_scope_influnence_pass.png)
 2. 规律：看第二直接依赖（横坐标）
 - compile：传递依赖与第一直接依赖一致
 - test：依赖不传递
@@ -534,3 +534,592 @@ Main-Class: pers.liy.helloworld.HelloWorld
 2. jarvana：http://www.jarvana.com/jarvana/
 3. MVNbrowser：http://www.mvnbrowser.com
 4. MVNrepository：http://mvnrepository.com
+
+
+# 7 生命周期和插件
+
+## 7.1 何为声明周期
+1. 声明周期是抽象的，具体工作有插件完成，一般有默认插件
+
+## 7.2 生命周期详解
+
+### 7.2.1 三套声明周期
+1. maven拥有三套相互独立的声明周期：clean、default、site
+- clean：清理项目
+- default：构建项目
+- site：建立项目站点
+2. 阶段phase：每个生命周期都是有顺序的，后面的phase依赖前面的phase都执行
+3. 三套生命周期是相互独立的、互不影响
+
+### 7.2.2 clean生命周期
+1. 清理项目
+- pre-clean
+- clean
+- post-clean
+
+### 7.2.3 default声明周期
+1. 真正构建时需要执行的步骤
+- validate
+- initialize
+- generate-sources
+- process-sources
+- generate-resources
+- process-resources
+- compile：编译项目主源码src/main/java下的java文件至项目输出到主classpath中
+- process-classes
+- generate-test-sources
+- process-test-sources
+- generate-test-resources
+- process-test-resources
+- test-compile：编译项目的测试代码src/test/java下的java文件至项目输出到测试classpath中
+- process-test-classes
+- test：使用单元测试框架运行测试
+- prepare-package
+- package
+- pre-integration-test
+- integration-test
+- post-integration-test
+- verify
+- install：将包安装到本地仓库，供其他项目使用
+- deploy：将最终包复制到远程仓库
+
+2. 了解详情请去 https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html
+
+### 7.2.4 site声明周期
+1. 目的是建立和发布站点
+- pre-site
+- site：生成站点文档
+- post-site
+- site-deploy：将生成的项目站点发布到服务器上
+
+### 7.2.5 命令行与生命周期
+1. 各声明周期是相互独立的，同声明周期阶段有前后依赖关系
+2. 比如 mvn clean install 执行了clean、default两个阶段
+
+## 7.3 插件目标
+1. maven会在需要的时候下载并使用插件
+2. 插件目标（plugin goal）:对应一个功能
+3. 比如插件maven-dependency-plugin的插件目标有很多如dependency:analyze、dependency:tree，插件前缀:插件目标
+
+## 7.4 绑定插件
+
+### 7.4.1 内置绑定
+
+![lifecycle_binding_clean_site](imgs/lifecycle_binding_clean_site.png)
+
+![lifecycle_binding_default](imgs/lifecycle_binding_default.png)
+
+### 7.4.2 自定义绑定
+
+1. 写法
+```
+<build>
+	<plugins>
+		<plugin>
+			<groupId>org.apache.maven.plugins</groupId>
+			<artifactId>maven-source-plugin</artifactId>
+			<version>2.1.1</version>
+			<executions>
+				<execution>
+					<id>attach-sources</id>
+					<phase>verify</phase>
+					<goals>
+						<goal>jar-no-fork</goal>
+					</goals>
+				</execution>
+			</executions>
+		</plugin>
+		...
+	</plugins>
+</build>
+```
+mvn verify就会执行这个插件了
+2. mvn help:describe -Dplugin=groupId:artifactId:version 输出插件的详情
+3. 当多个插件绑定到同一阶段，按这些插件声明顺序先后执行
+
+## 7.5 配置插件
+
+### 7.5.1 命令行插件配置
+1. 命令 -D key=value方式，如mvn install -Dmaven.test.skip=true
+
+### 7.5.2 pom中插件全局配置
+1. 在<plugin>中<configuration>
+
+### 7.5.3 pom中插件任务配置
+```
+<build>
+<plugins>
+...
+<plugin>
+<executions>
+<execution>
+<configuration>
+```
+
+## 7.6 获取插件信息    
+
+1. 基本所有maven插件都来自Apache和Codehaus
+2. https://maven.apache.org/plugins/
+3. https://www.mojohaus.org/plugins.html
+4. 常用插件附录C
+5. mvn help:describe
+- mvn help:describe -Dplugin=groupId:artifactId:version查看插件信息
+- mvn help:describe -Dplugin=compiler
+- mvn help:describe -Dplugin=compiler -Dgoal=compile
+- mvn help:describe -Dplugin=compiler -Ddetail
+
+## 7.7 从命令行调用插件   
+
+1. mvn [options] [<goal(s)>] [<phase(s)>]
+- goal：插件目标，mvn支持从命令行调用插件目标
+- phase：声明周期
+
+## 7.8 maven插件机制
+1. mvn help:system help怎么找到对应的插件org.apache.maven.plugins:maven-help-plugin的
+
+2. 插件根据坐标先找本地仓库找，没有再去远程仓库找
+3. maven区别对待依赖的远程仓库、插件远程仓库
+4. 插件远程仓库使用pluginRepositorys和pluginRepository配置，而不使用repositorys和repository
+5. 插件的远程仓库配置方式
+```
+<project>
+...
+  <repositories>
+    <repository>
+      <id>maven-net-cn</id>
+      <name>Maven China Mirror</name>
+      <url>http://maven.net.cn/content/groups/public/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>maven-net-cn</id>
+      <name>Maven China Mirror</name>
+      <url>http://maven.net.cn/content/groups/public/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>    
+    </pluginRepository>
+  </pluginRepositories>
+...
+</project>
+```
+6. 一般中央仓库包含的插件能完全满足我们的需求，因此也不需要配置其他的插件仓库，也可以在settings.xml中加入
+7. 插件默认groupId是org.apache.maven.plugins，可以省略写，但不推荐这样
+8. 超级pom是所有maven项目的父pom
+9. 由于有超级pom，有一有一些默认插件比如maven-clean-plugin、maven-compiler-plugin等
+10. maven3中当用户没写version时，直接用最新的release，但仍有潜在危险，应该显示设定版本
+11. 插件前缀与插件坐标groupId:artifactId是一一对应的，这种匹配关系存在仓库元数据中
+
+
+# 8 聚合和集成
+
+## 8.2 聚合
+1. 聚合的是项目中的各个模块，各个模块有自己的pom
+2. groupId、version与子模块一直，artifactId自己定义，packaging值为pom，name随意起便于阅读
+3. 聚合的关键是<modules>
+```
+<modules>
+    <module>sub-a</module>
+    <module>sub-b</module>
+</modules>
+```
+4. sub-a、sub-b是父pom的相对路径的字模块文件夹
+5. 聚合目录与其他子模块目录并非一定要父子关系，平行目录需要如下
+```
+<modules>
+    <module>../sub-a</module>
+    <module>../sub-b</module>
+</modules>
+```
+
+## 8.3 继承
+
+1. 通过继承去除pom中的重复
+2. 继承的父pom中，packaging也必须是pom
+3. 父pom就是帮助消除重复，所以不需要src/main/java/之类的文件夹了
+4. 父模块写法
+```
+<?xml version="1.0" encoding="UTF-8"?>  
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">  
+    <modelVersion>4.0.0</modelVersion>  
+    <groupId>com.juvenxu.mvnbook.account</groupId>  
+    <artifactId>account-parent</artifactId>  
+    <version>1.0.0-SNAPSHOT</version>  
+    <packaging>pom</packaging>  
+    <name>Account Parent</name>     
+</project> 
+
+```
+继承父pom的子pom写法
+```
+<?xml version="1.0" encoding="UTF-8"?>  
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">  
+    <modelVersion>4.0.0</modelVersion> 
+    <parent>
+        <groupId>com.juvenxu.mvnbook.account</groupId>  
+        <artifactId>account-parent</artifactId>  
+        <version>1.0.0-SNAPSHOT</version>  
+        <relativePath>../account-parent/pom.xml</relativePath>  
+    </parent> 
+    <artifactId>account-email</artifactId> 
+    <name>Account Email</name> 
+
+    <dependencies>
+            ......
+    </dependencies>
+
+    <build>
+            <plugins>
+                ......
+            </plugins>
+    </build>
+</project>
+
+```
+5. 子模块隐式继承了父pom的groupId、version，如果子模块有自己的也可显示声明
+6. artifactId不能继承自父pom
+7. 最后在聚合模块中加上父模块
+```
+<?xml version="1.0" encoding="UTF-8"?>  
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">  
+<modelVersion>4.0.0</modelVersion>  
+    <groupId>com.juvenxu.mvnbook.account</groupId>  
+    <artifactId>account-aggregator</artifactId>  
+    <version>1.0.0-SNAPSHOT</version>  
+    <packaging>pom</packaging>  
+    <name>Account Aggregator</name>  
+    <modules>
+         <module>account-parent</module>    
+         <module>account-email</module>  
+    <modules>     
+</project> 
+```
+
+8. 可继承的pom元素
+- groupId
+- version
+- description
+- organization
+- inceptionYear
+- url
+- developers
+- contributors
+- distributionManagement
+- issueManagement
+- ciManagement
+- scm
+- mailingLists
+- proterties
+- dependencies
+- dependencyManagement
+- repositories
+- build
+- reporting
+
+### 8.3.3 依赖管理
+
+1. 解决的是如果把两个模块公用依赖抽出存入共同的parent的pom中，之后所有子pom都会继承这个依赖，这样不合理
+2. dependencyManagement元素既能让子模块集成到父模块的依赖配置，又能保证子模块依赖的使用的灵活性
+3. dependencyManagement下的依赖声明不会引入实际的依赖，不过它能约束dependencies下的依赖使用
+```
+<?xml version="1.0" encoding="UTF-8"?>  
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">  
+<modelVersion>4.0.0</modelVersion>  
+        <groupId>com.juvenxu.mvnbook.account</groupId>  
+        <artifactId>account-parent</artifactId>  
+        <version>1.0.0-SNAPSHOT</version>  
+        <packaging>pom</packaging>  
+        <name>Account Parent</name> 
+        <properties>
+                <springframework.version>2.5.6</springframework.version>
+        </properties>
+
+        <dependencyManagement>
+                <dependencies>
+                       <dependency>
+                            <groupId>org.springframework </groupId>
+                            <artifactId>spring-core</artifactId>
+                            <version>${springframework.version}</version>
+                       </dependency>
+
+                       ......
+
+                </dependencies>
+        </dependencyManagement>
+</project>
+
+```
+4. 上面dependencyManagement声明的依赖既不会给account-parent引入依赖，也不会给它的子模块引入依赖，不过这段配置是会被继承
+5. 如果子模块不声明依赖的使用，即使该依赖在父模块声明了dependencyManagement也不会生效
+```
+<?xml version="1.0" encoding="UTF-8"?>  
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">  
+<modelVersion>4.0.0</modelVersion> 
+        <parent>
+            <groupId>com.juvenxu.mvnbook.account</groupId>  
+            <artifactId>account-parent</artifactId>  
+            <version>1.0.0-SNAPSHOT</version>  
+            <relativePath>../account-parent/pom.xml</relativePath>  
+        </parent> 
+        <artifactId>account-email</artifactId> 
+        <name>Account Email</name> 
+
+        <dependencies>
+                <dependency>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </dependency>
+                
+                ......
+                
+        </dependencies>
+
+        <build>
+                <plugins>
+                    ......
+                </plugins>
+        </build>
+
+</project>
+```
+
+### 8.3.4 插件管理
+1. pluginManagement的父pom中
+```
+<build>
+    <pluginManagement>
+        <plugins>
+            <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>2.1.2</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+            </plugin>
+        </plugins>
+    </pluginManagement>
+</build>
+```
+在子模块中继承pluginManager后的插件配置
+```
+  <build>
+      <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+          </plugin>
+        </plugins>
+  </build>
+```
+2. 正确的方式是把所有插件都放在父pluginManagement中，统一在父pom中配置版本，子模块中不配置版本信息
+
+## 8.4 聚合与继承关系
+1. 聚合：方便快速构建项目，继承：消除重复配置
+2. 一般项目pom既是聚合pom又是父pom，融合使用聚合继承没问题
+3. 共同点是packaging都是pom
+
+## 8.5 约定优于配置
+1. 约定可以大量减少配置
+2. maven3超级pom在$MAVEN_HOME/lib/maven-model-builder-x.x.x.jar中的org//apache/maven/model/pom-4.0.0.xml路径下
+3. maven约定都是在超级pom中配置的
+```
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<!-- START SNIPPET: superpom -->
+<project>
+  <modelVersion>4.0.0</modelVersion>
+
+  <repositories>
+    <repository>
+      <id>central</id>
+      <name>Central Repository</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <layout>default</layout>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <pluginRepositories>
+    <pluginRepository>
+      <id>central</id>
+      <name>Central Repository</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <layout>default</layout>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+      <releases>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+    </pluginRepository>
+  </pluginRepositories>
+
+  <build>
+    <directory>${project.basedir}/target</directory>
+    <outputDirectory>${project.build.directory}/classes</outputDirectory>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+    <testOutputDirectory>${project.build.directory}/test-classes</testOutputDirectory>
+    <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+    <scriptSourceDirectory>${project.basedir}/src/main/scripts</scriptSourceDirectory>
+    <testSourceDirectory>${project.basedir}/src/test/java</testSourceDirectory>
+    <resources>
+      <resource>
+        <directory>${project.basedir}/src/main/resources</directory>
+      </resource>
+    </resources>
+    <testResources>
+      <testResource>
+        <directory>${project.basedir}/src/test/resources</directory>
+      </testResource>
+    </testResources>
+    <pluginManagement>
+      <!-- NOTE: These plugins will be removed from future versions of the super POM -->
+      <!-- They are kept for the moment as they are very unlikely to conflict with lifecycle mappings (MNG-4453) -->
+      <plugins>
+        <plugin>
+          <artifactId>maven-antrun-plugin</artifactId>
+          <version>1.3</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>2.2-beta-5</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>2.8</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-release-plugin</artifactId>
+          <version>2.5.3</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <reporting>
+    <outputDirectory>${project.build.directory}/site</outputDirectory>
+  </reporting>
+
+  <profiles>
+    <!-- NOTE: The release profile will be removed from future versions of the super POM -->
+    <profile>
+      <id>release-profile</id>
+
+      <activation>
+        <property>
+          <name>performRelease</name>
+          <value>true</value>
+        </property>
+      </activation>
+
+      <build>
+        <plugins>
+          <plugin>
+            <inherited>true</inherited>
+            <artifactId>maven-source-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <inherited>true</inherited>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <inherited>true</inherited>
+            <artifactId>maven-deploy-plugin</artifactId>
+            <configuration>
+              <updateReleaseInfo>true</updateReleaseInfo>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+</project>
+<!-- END SNIPPET: superpom -->
+
+```
+
+## 8.6 反应堆
+
+1. 反应堆（Reactor）：所有模块组成的一个构建结构
+2. 单模块项目：反应堆就是它本事
+3. 多模块项目：反应堆包含各模块之间继承与依赖的关系，从而自动计算出模块构建顺序
+
+### 8.6.1 反应堆构建顺序
+1. 反应堆pom
+```
+<modules>  
+  <module>account-email</module>  
+  <module>account-persist</module>  
+  <module>account-parent</module>  
+</modules>  
+```
+2. 构建顺序是：account-aggregator、account-parent、account-email、account-persist
+3. 如果构建时发现pom中有依赖，就先构建依赖的模块
+4. 因此当出现A依赖B，B又依赖A时，构建报错
+
+### 8.6.2 裁剪反应堆
+
+- -am, --also-make：同时构建所列模块的依赖模块
+- -amd, -also-make-dependents：同时构建依赖于所列模块的模块
+- -pl, --projects <args>：构建指定模块，模块间用逗号间隔
+- -rf, --resume-from <args>：从指定模块回复反应堆
