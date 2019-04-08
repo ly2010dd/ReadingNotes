@@ -96,10 +96,12 @@ public class HelloWorld {
     <name>Maven Hello World Project</name>
 
     <dependencies>
-        <groupId>junit</groupId>
-        <artifactId>junit</artifactId>
-        <version>4.7</version>
-        <scope>test</scope>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.7</version>
+            <scope>test</scope>
+	</dependency>
     </dependencies>
 </project>
 
