@@ -400,3 +400,243 @@ COPY {table [(column [, ...])] | (query)} TO {'file' | PROGRAM 'command' | STDOU
 ```
 - Greenplum4.x引入可写外部表，在导出数据时可以用可写外表，性能好
 - Greenplum3.x导出数据只能用COPY实现，在master上汇总导出
+
+# 第3章 Greenplum实战
+
+## 3.1 历史拉链表 P53
+
+- 一种数据模型
+- 记录一个事物从开始一直到 当前状态的 所有变化信息
+- 可以避免 每天存储所有记录 的 海量存储问题
+- 也是处理 缓慢变化数据 的常见方式
+
+## 3.2 日志分析 P65
+
+## 3.3 数据分布
+- 充分体现分布式架构优势
+- 了解数据如何散落在各个节点上
+- 了解数据倾斜 对 数据加载、数据分析、数据导出 影响
+
+### 3.3.1 数据分散情况查看
+- 利用generate_series和repeat函数 生成一些测试数据
+```
+create table test_distribute_1
+as (select a as id, 
+           round(random()) as flag, 
+           repeat('a', 1024) as value 
+    from generate_series(1, 5000000)a
+    );
+```
+- 500万数据散落在4个数据节点 
+- 查看数据分布情况
+```
+select gp_segment_id, count(*)
+from test_distribute_1
+group by 1; 
+
+ gp_segment_id |  count  
+---------------+---------
+             3 | 1250000
+             1 | 1250000
+             2 | 1250001
+             0 | 1249999
+(4 rows)
+```
+
+### 3.3.2 数据加载速度影响
+1. 数据倾斜状态下 的 数据加载
+    - 准备测试数据，将测试数据导出
+    ```
+    copy test_distribute_1 to '/home/gpadmincloud/test_data/test_distribute.dat' 
+    with delimiter '|';
+    ```
+    - 建立测试表，以flag字段为分布键
+    ```
+    create table test_distribute_2 as select * from test_distribute_1 limit 0 distributed by(flag);
+    ```
+    - 执行数据导入
+    ```
+    time psql -h localhost -d testdb -c "copy test_distribute_2 from stdin with delimiter '|'" < /home/gpadmincloud/test_data/test_distribute.dat
+        
+    real	2m5.871s
+    user	0m2.552s
+    sys	0m3.416s
+    ```
+    - 由于flag取值0、1，因此数据只能分散到两个数据节点上（数据倾斜）
+    ```
+    select gp_segment_id, count(*)
+    from test_distribute_2
+    group by 1; 
+    
+     gp_segment_id |  count  
+    ---------------+---------
+                 1 | 2498796
+                 2 | 2501204
+    (2 rows)
+    ```
+    - 查询数据分布节点id对应的host
+    ```
+    testdb=# select dbid, content, role, port, hostname from gp_segment_configuration where content in (1,2) order by role;
+     dbid | content | role | port  |      hostname       
+    ------+---------+------+-------+---------------------
+       10 |       2 | m    | 50000 | sdw4-snova-2mtwkcou
+        5 |       1 | m    | 50000 | sdw1-snova-2mtwkcou
+        7 |       2 | p    | 40000 | sdw3-snova-2mtwkcou
+        3 |       1 | p    | 40000 | sdw2-snova-2mtwkcou
+    (4 rows)
+
+    testdb=# select * from gp_segment_configuration ;
+     dbid | content | role | preferred_role | mode | status | port  |      hostname       |       address       | replication_port 
+    ------+---------+------+----------------+------+--------+-------+---------------------+---------------------+------------------
+        1 |      -1 | p    | p              | s    | u      |  5432 | mdw-snova-2mtwkcou  | mdw-snova-2mtwkcou  |                 
+        2 |       0 | p    | p              | s    | u      | 40000 | sdw1-snova-2mtwkcou | sdw1-snova-2mtwkcou |            41000
+        3 |       1 | p    | p              | s    | u      | 40000 | sdw2-snova-2mtwkcou | sdw2-snova-2mtwkcou |            41000
+        4 |       0 | m    | m              | s    | u      | 50000 | sdw2-snova-2mtwkcou | sdw2-snova-2mtwkcou |            51000
+        5 |       1 | m    | m              | s    | u      | 50000 | sdw1-snova-2mtwkcou | sdw1-snova-2mtwkcou |            51000
+        6 |      -1 | m    | m              | s    | u      |  5432 | smdw-snova-2mtwkcou | smdw-snova-2mtwkcou |                 
+        7 |       2 | p    | p              | s    | u      | 40000 | sdw3-snova-2mtwkcou | sdw3-snova-2mtwkcou |            41000
+       10 |       2 | m    | m              | s    | u      | 50000 | sdw4-snova-2mtwkcou | sdw4-snova-2mtwkcou |            51000
+        8 |       3 | p    | p              | s    | u      | 40000 | sdw4-snova-2mtwkcou | sdw4-snova-2mtwkcou |            41000
+        9 |       3 | m    | m              | s    | u      | 50000 | sdw3-snova-2mtwkcou | sdw3-snova-2mtwkcou |            51000
+    (10 rows)
+
+    ```
+
+2. 数据分布均匀状态下 的 数据加载
+    - 建立测试表，以id字段为分布键
+    ```
+    create table test_distribute_3 as select * from test_distribute_1 limit 0 distributed by(id);
+    ```
+    - 执行数据导入
+    ```
+    time psql -h localhost -d testdb -c "copy test_distribute_3 from stdin with delimiter '|'" < /home/gpadmincloud/test_data/test_distribute.dat
+    
+    real	1m37.148s
+    user	0m2.460s
+    sys	0m2.776s
+    ```
+    - 由于id取值顺序分布，因此数据可以均匀分散至所有数据节点
+    ```
+    select gp_segment_id, count(*)
+    from test_distribute_3
+    group by 1; 
+    
+     gp_segment_id |  count  
+    ---------------+---------
+                 1 | 1249999
+                 3 | 1250000
+                 2 | 1250001
+                 0 | 1250000
+    (4 rows)
+    ```
+    - 因此，数据分布均匀的情况下，可以利用更多机器进行工作，性能高
+    
+### 3.3.3 数据查询速度影响
+1. 数据倾斜状态下的数据查询
+
+```
+select gp_segment_id, count(*), max(length(value)) from test_distribute_2 group by 1;
+ 
+ gp_segment_id |  count  | max  
+---------------+---------+------
+             1 | 2498796 | 1024
+             2 | 2501204 | 1024
+(2 rows)
+
+Time: 11689.211 ms
+```
+
+2. 数据分布均匀状态下的数据查询
+
+```
+select gp_segment_id, count(*), max(length(value)) from test_distribute_3 group by 1;
+ 
+ gp_segment_id |  count  | max  
+---------------+---------+------
+             2 | 1250001 | 1024
+             3 | 1250000 | 1024
+             0 | 1250000 | 1024
+             1 | 1249999 | 1024
+(4 rows)
+
+Time: 6180.228 ms
+```
+
+- 由于数据分布在所有节点上，所有服务器都有磁盘消耗，从而大大提升数据查询性能
+
+## 3.4 数据压缩
+### 3.4.1 对数据加载速度影响
+
+1. 创建一个未压缩普通表
+
+```
+create table test_compress_1 as select * from test_distribute_1 distributed by(flag);
+
+Time: 46831.182 ms
+```
+
+2. 创建一个压缩表
+
+```
+create table test_compress_2 with(appendonly=true,compresslevel=5) as select * from test_distribute_1 distributed by(flag);
+
+Time: 31004.558 ms
+```
+### 3.4.2 对数据查询速度影响
+
+1. 查询未压缩表
+
+```
+select gp_segment_id, count(*), max(length(value)) from test_compress_1 group by 1;
+ gp_segment_id |  count  | max  
+---------------+---------+------
+             1 | 2498796 | 1024
+             2 | 2501204 | 1024
+(2 rows)
+
+Time: 21115.277 ms
+
+```
+
+2. 查询已压缩表
+
+```
+ gp_segment_id |  count  | max  
+---------------+---------+------
+             2 | 2501204 | 1024
+             1 | 2498796 | 1024
+(2 rows)
+
+Time: 12818.013 ms
+```
+
+## 3.5 索引
+- Greenplum支持B-tree、bitmap、函数索引等
+- 未建索引的表查询
+```
+create table test_index_1 as select * from test_distribute_1;
+```
+- 执行查询，用1099ms
+```
+select id, flag from test_index_1 where id=100;
+ id  | flag 
+-----+------
+ 100 |    0
+(1 row)
+
+Time: 1099.389 ms
+```
+- 在id上创建索引
+```
+create index test_index_1_idx on test_index_1(id);
+```
+- 再次执行查询，只用27ms
+```
+select id, flag from test_index_1 where id=100;
+ id  | flag 
+-----+------
+ 100 |    0
+(1 row)
+
+Time: 27.650 ms
+```
