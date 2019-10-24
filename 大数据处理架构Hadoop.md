@@ -165,6 +165,8 @@ HDFS Federation设计可解决单名称节点存在的以下几个问题：
 - 资源划分不合理（强制划分为slot ，包括Map slot和Reduce slot）
 - MapReduce1.0框架图
 ![MapReduce1.0框架图](imgs/MapReduce1.0_15.3.1.png)
+- MapReduce工作流程图
+![MapReduce工作流程图](imgs/Map_reduce_process.png)
 
 ### YARN设计思路
 - MapReduce1.0既是计算框架，又是资源管理调度框架
