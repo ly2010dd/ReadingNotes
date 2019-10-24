@@ -23,7 +23,7 @@
 - 支持多种编程语言
 
 ## Hadoop版本演变
-![Hadoop版本分支图](imgs/Hadoop-version-branches.png)
+![Hadoop版本分支图](imgs/Hadoop_version_branches.png)
 - Hadoop一代
 1. 三大版本：0.20.x, 0.21.x, 0.22.x
 2. 0.20.x--> 1.0.x-->稳定版
